@@ -1,9 +1,11 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import MapComponent from './components/MapComponent';
 import { Client, StrategicInsight } from './types';
 import { getStrategicAnalysis, querySchoolAssistant } from './services/geminiService';
+
+const STORAGE_KEY = 'slater_strategies_client_hub_v1';
 
 const INITIAL_DATA: Client[] = [
   {
@@ -36,7 +38,12 @@ const INITIAL_DATA: Client[] = [
 ];
 
 const App: React.FC = () => {
-  const [clients, setClients] = useState<Client[]>(INITIAL_DATA);
+  // Initialize from storage or defaults
+  const [clients, setClients] = useState<Client[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : INITIAL_DATA;
+  });
+  
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [insight, setInsight] = useState<StrategicInsight | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -45,6 +52,11 @@ const App: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isAiAssistantLoading, setIsAiAssistantLoading] = useState(false);
   const [aiAssistantResponse, setAiAssistantResponse] = useState<string | null>(null);
+
+  // Auto-save whenever clients array changes
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(clients));
+  }, [clients]);
 
   const filteredClients = useMemo(() => {
     if (!searchTerm.trim()) return clients;
@@ -65,10 +77,40 @@ const App: React.FC = () => {
     setInsight(null);
   };
 
-  const handleRestoreDefaults = () => {
-    setClients(INITIAL_DATA);
+  const handleUpdateClient = (updatedClient: Client) => {
+    setClients(prev => prev.map(c => c.id === updatedClient.id ? updatedClient : c));
     setInsight(null);
-    setSearchTerm('');
+  };
+
+  const handleDeleteClient = (id: string) => {
+    setClients(prev => prev.filter(c => c.id !== id));
+    if (selectedClient?.id === id) setSelectedClient(null);
+    setInsight(null);
+  };
+
+  const handleRestoreDefaults = () => {
+    if (window.confirm("Replace current map with demo data?")) {
+      setClients(INITIAL_DATA);
+      setInsight(null);
+      setSearchTerm('');
+    }
+  };
+
+  const handleClearAll = () => {
+    if (window.confirm("Permanently clear all map entries?")) {
+      setClients([]);
+      setInsight(null);
+    }
+  };
+
+  const handleDownload = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(clients, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "slater_strategies_export.json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
   };
 
   const handleSelectClient = (client: Client) => {
@@ -102,18 +144,24 @@ const App: React.FC = () => {
         clients={filteredClients} 
         onAddClient={handleAddClient} 
         onAddMultipleClients={handleAddMultipleClients}
+        onUpdateClient={handleUpdateClient}
+        onDeleteClient={handleDeleteClient}
         onSelectClient={handleSelectClient}
         onRestoreDefaults={handleRestoreDefaults}
+        onClearAll={handleClearAll}
+        onDownload={handleDownload}
       />
       
       <main className="flex-1 relative flex flex-col overflow-hidden">
-        {/* Header with Search and AI features */}
         <header className="absolute top-0 left-0 right-0 z-10 p-4 flex flex-col md:flex-row gap-4 items-center justify-between pointer-events-none">
           <div className="flex gap-4 pointer-events-auto shrink-0">
             <div className="bg-[#112240]/90 backdrop-blur shadow-2xl border border-slate-700/50 rounded-2xl px-6 py-3 flex items-center gap-6">
               <div className="border-r border-slate-700 pr-6">
-                <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest">Total Entities</p>
-                <p className="text-xl font-bold text-white">{clients.length}</p>
+                <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest">Total Nodes</p>
+                <div className="flex items-baseline gap-2">
+                  <p className="text-xl font-bold text-white">{clients.length}</p>
+                  <span className="text-[8px] text-emerald-500 font-black tracking-tighter uppercase animate-pulse">Autosaved</span>
+                </div>
               </div>
               <div>
                 <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest">Visible</p>
@@ -122,7 +170,6 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Centered Search Bar */}
           <div className="pointer-events-auto flex-1 max-w-xl mx-4">
             <div className="relative group w-full">
               <input 
@@ -169,11 +216,10 @@ const App: React.FC = () => {
           <MapComponent 
             clients={filteredClients} 
             onMarkerClick={handleSelectClient} 
-            center={[27.2730, -80.3582]}
+            center={clients.length > 0 ? [clients[0].latitude, clients[0].longitude] : [27.2730, -80.3582]}
           />
         </div>
 
-        {/* AI Assistant Response Popover */}
         {aiAssistantResponse && (
           <div className="absolute top-24 left-1/2 -translate-x-1/2 z-30 w-full max-w-lg animate-in fade-in zoom-in-95 duration-200 px-4">
              <div className="bg-[#112240] rounded-3xl shadow-2xl border border-slate-700 p-6 relative">
