@@ -1,0 +1,7 @@
+{
+  "name": "Slater Strategies ClientHub",
+  "description": "A specialized mapping tool to visualize and analyze our entire client network, including roofing services and our partners across Christian, Catholic, Charter, and Public schools.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
